@@ -9,7 +9,7 @@ import readline from 'readline';
 import banner from './banner.js';
 dotenv.config();
 
-const provider = new ethers.JsonRpcProvider(process.env.RPC_URL);
+const provider = new ethers.JsonRpcProvider("https://tea-sepolia.g.alchemy.com/public");
 let wallet;
 
 const rl = readline.createInterface({
