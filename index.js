@@ -395,34 +395,19 @@ async function autoExecuteAll() {
         console.log(chalk.yellow(`提取数量: ${withdrawAmount} stTEA`));
         await withdrawTeaWithAmount(withdrawAmount);
         
-        // 5. 向特定地址发送固定金额 - 随机次数(1-5次)
-        console.log(chalk.cyan("\n5. 向特定地址发送固定金额..."));
-        const sendLoopCount = Math.floor(Math.random() * 4) + 1; // 随机1-5次
-        console.log(chalk.yellow(`执行次数: ${sendLoopCount}次`));
-        for (let i = 0; i < sendLoopCount; i++) {
-            const sendAmount = "0.005"; // 固定发送0.005个TEA
-            const targetAddress = "0xea527A208e920d679b7Bf2dC00db71eb1B936571";
-            console.log(chalk.yellow(`\n第${i + 1}次发送：${sendAmount} TEA 到地址: ${targetAddress}`));
-            await sendFixedAmount(targetAddress, sendAmount);
-            if (i < sendLoopCount - 1) {
-                console.log(chalk.gray("⌛ 等待10秒进行下一次发送...\n"));
-                await new Promise(res => setTimeout(res, 10000));
-            }
-        }
-        
-        // 6. 自动交易 - 随机次数(3-8次)
-        console.log(chalk.cyan("\n6. 自动交易..."));
-        const autoTradeCount = Math.floor(Math.random() * 5) + 3; // 随机3-8次
+        // 5. 自动交易 - 随机次数(102-150次)
+        console.log(chalk.cyan("\n5. 自动交易..."));
+        const autoTradeCount = Math.floor(Math.random() * (150 - 102 + 1)) + 102; // 随机102-150次
         console.log(chalk.yellow(`执行次数: ${autoTradeCount}次`));
         await autoTransactionWithCount(autoTradeCount);
         
         console.log(chalk.green("\n✅ 所有功能执行完成!"));
         const now = new Date();
         console.log(chalk.yellow(`当前时间: ${now.toLocaleString()}`));
-        console.log(chalk.yellow("48小时后将重新执行所有功能..."));
+        console.log(chalk.yellow("24小时后将重新执行所有功能..."));
         
-        // 48小时后重新执行
-        setTimeout(autoExecuteAll, 48 * 60 * 60 * 1000); // 改为48小时
+        // 24小时后重新执行
+        setTimeout(autoExecuteAll, 24 * 60 * 60 * 1000); // 24小时
     } catch (error) {
         console.log(chalk.red(`❌ 执行过程中出错: ${error.message}`));
         console.log(chalk.yellow("30秒后重试..."));
@@ -569,7 +554,8 @@ async function autoTransactionWithCount(transactionCount) {
             "0xb744874877ecb800eebf37217bd26f4411d2b326" : 
             addresses[Math.floor(Math.random() * addresses.length)];
             
-        const amount = (Math.random() * (0.09 - 0.01) + 0.01).toFixed(4);
+        // 随机生成0.00002到0.0001之间的金额
+        const amount = (Math.random() * (0.0001 - 0.00002) + 0.00002).toFixed(6);
 
         console.log(chalk.blueBright(`🔹 交易 ${i + 1}/${transactionCount}`));
         console.log(chalk.cyan(`➡ 发送 ${chalk.green(amount + " TEA")} 到 ${chalk.yellow(recipient)}`));
@@ -703,87 +689,6 @@ async function withdrawTeaWithAmount(amount) {
     }
 }
 
-// 添加向特定地址发送固定金额的函数
-async function sendFixedAmount(targetAddress, amount) {
-    try {
-        const amountWei = ethers.parseEther(amount);
-        const feeData = await provider.getFeeData();
-        const estimatedGas = 300000; // 增加 gas limit 以支持合约调用
-        const gasCost = ethers.formatEther(feeData.gasPrice * BigInt(estimatedGas));
-        
-        const confirmed = await confirmTransaction({
-            操作: '发送',
-            数量: `${amount} TEA`,
-            目标地址: targetAddress,
-            'Gas费用': `${gasCost} TEA`
-        });
-        
-        if (!confirmed) {
-            console.log(chalk.yellow("❌ 发送已取消"));
-            return;
-        }
-        
-        console.log(chalk.yellow("⏳ 正在发送..."));
-        
-        // 添加重试机制
-        let retries = 3;
-        while (retries > 0) {
-            try {
-                // 检查目标地址是否为合约
-                const code = await provider.getCode(targetAddress);
-                const isContract = code !== '0x';
-                
-                if (isContract) {
-                    console.log(chalk.yellow("⚠️ 目标地址是合约地址，正在调整交易参数..."));
-                }
-                
-                const tx = await wallet.sendTransaction({
-                    to: targetAddress,
-                    value: amountWei,
-                    gasLimit: estimatedGas,
-                    maxFeePerGas: feeData.maxFeePerGas,
-                    maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
-                    type: 2 // 使用 EIP-1559 交易类型
-                });
-                
-                console.log(chalk.green(`✅ 交易已发送! 哈希: ${chalk.blue(tx.hash)}`));
-                console.log(chalk.gray("⌛ 等待确认..."));
-                
-                const receipt = await tx.wait();
-                if (receipt.status === 1) {
-                    console.log(chalk.green(`✅ 发送成功! 区块: ${receipt.blockNumber}`));
-                    console.log(chalk.green(`✅ 成功发送 ${amount} TEA 到 ${targetAddress}!`));
-                    break;
-                } else {
-                    throw new Error("交易失败");
-                }
-            } catch (error) {
-                retries--;
-                if (retries === 0) {
-                    throw error;
-                }
-                console.log(chalk.yellow(`❌ 发送失败，剩余重试次数: ${retries}`));
-                console.log(chalk.yellow(`错误信息: ${error.message}`));
-                if (error.reason) {
-                    console.log(chalk.yellow(`失败原因: ${error.reason}`));
-                }
-                await new Promise(resolve => setTimeout(resolve, 5000)); // 等待5秒后重试
-            }
-        }
-        
-        // 更新钱包信息
-        await showWalletInfo();
-    } catch (error) {
-        console.log(chalk.red(`❌ 发送失败: ${error.message}`));
-        if (error.reason) {
-            console.log(chalk.red(`失败原因: ${error.reason}`));
-        }
-        if (error.data) {
-            console.log(chalk.red(`错误数据: ${error.data}`));
-        }
-    }
-}
-
 // 修改主进程函数，在自动执行模式下不显示选项菜单
 async function startProcess() {
     showBanner();
@@ -804,7 +709,7 @@ async function startProcess() {
     const autoExecute = await askQuestion(chalk.magenta("\n是否自动执行所有功能? (y/n): "));
     if (autoExecute.toLowerCase() === 'y' || autoExecute.toLowerCase() === 'yes') {
         console.log(chalk.yellow("\n⚡ 启动自动执行模式"));
-        console.log(chalk.yellow("📅 执行频率: 每48小时一次"));
+        console.log(chalk.yellow("📅 执行频率: 每24小时一次"));
         console.log(chalk.yellow("🔄 出错重试: 30秒后\n"));
         // 直接执行自动执行函数，不显示选项菜单
         await autoExecuteAll();
